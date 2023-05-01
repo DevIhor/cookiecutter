@@ -46,6 +46,23 @@ def is_copy_only_path(path, context):
     return False
 
 
+def is_ignore_path(path, context):
+    """Check whether the given `path` should be ignored.
+    Returns True if `path` matches a pattern in the given `context` dict,
+    otherwise False.
+    :param path: A file-system path referring to a file or dir that should be ignored.
+    :param context: cookiecutter context.
+    """
+    try:
+        for ignore in context['cookiecutter']['_ignore']:
+            if fnmatch.fnmatch(path, ignore):
+                return True
+    except KeyError:
+        return False
+
+    return False
+
+
 def apply_overwrites_to_context(context, overwrite_context):
     """Modify the given context in place based on the overwrite_context."""
     for variable, overwrite in overwrite_context.items():
@@ -342,7 +359,9 @@ def generate_files(
                 # We check the full path, because that's how it can be
                 # specified in the ``_copy_without_render`` setting, but
                 # we store just the dir name
-                if is_copy_only_path(d_, context):
+                if is_ignore_path(d_, context):
+                    logger.debug('Found ignore path %s', d)
+                elif is_copy_only_path(d_, context):
                     logger.debug('Found copy only path %s', d)
                     copy_dirs.append(d)
                 else:
@@ -379,6 +398,9 @@ def generate_files(
 
             for f in files:
                 infile = os.path.normpath(os.path.join(root, f))
+                if is_ignore_path(infile, context):
+                    logger.debug('Ignore file %s', infile)
+                    continue
                 if is_copy_only_path(infile, context):
                     outfile_tmpl = env.from_string(infile)
                     outfile_rendered = outfile_tmpl.render(**context)
