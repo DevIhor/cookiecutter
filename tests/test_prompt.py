@@ -277,6 +277,35 @@ class TestReadUserChoice:
         read_user_choice.assert_called_once_with('orientation', choices)
         assert cookiecutter_dict == {'orientation': 'all'}
 
+    def test_should_invoke_read_user_multiple_choice(self, mocker):
+        """Verify correct function called for multi select(list) variables."""
+        prompt_choice = mocker.patch(
+            'cookiecutter.prompt.prompt_multiple_choice_for_config',
+            wraps=prompt.prompt_multiple_choice_for_config,
+        )
+
+        read_multiple_user_choice = mocker.patch('cookiecutter.prompt.read_multiple_user_choice')
+        read_multiple_user_choice.return_value = ['landscape', 'portrait']
+
+        read_user_variable = mocker.patch('cookiecutter.prompt.read_user_variable')
+
+        choices = ['landscape', 'portrait', 'diagonal']
+        context = {
+            'cookiecutter': {
+                'orientation': {
+                    'type': 'multichoice',
+                    'value': choices
+                }
+            }
+        }
+
+        cookiecutter_dict = prompt.prompt_for_config(context)
+
+        assert not read_user_variable.called
+        assert prompt_choice.called
+        read_multiple_user_choice.assert_called_once_with('orientation', choices)
+        assert cookiecutter_dict == {'orientation': ['landscape', 'portrait']}
+
     def test_should_invoke_read_user_variable(self, mocker):
         """Verify correct function called for string input variables."""
         read_user_variable = mocker.patch('cookiecutter.prompt.read_user_variable')
@@ -377,6 +406,56 @@ class TestPromptChoiceForConfig:
             no_input=False,  # Ask the user for input
         )
         read_user_choice.assert_called_once_with('orientation', choices)
+        assert expected_choice == actual_choice
+
+
+class TestPromptMultipleChoiceForConfig:
+    """Class to unite multiple choices prompt related tests with config test."""
+
+    @pytest.fixture
+    def choices(self):
+        """Fixture. Just populate choices variable."""
+        return ['landscape', 'portrait', 'diagonal']
+
+    @pytest.fixture
+    def context(self, choices):
+        """Fixture. Just populate context variable."""
+        return {'cookiecutter': {'available_orientations': choices}}
+
+    def test_should_return_first_option_if_no_input(self, mocker, choices, context):
+        """Verify prompt_multiple_choice_for_config return
+        first list option on no_input=True.
+        """
+        read_user_choice = mocker.patch('cookiecutter.prompt.read_multiple_user_choice')
+
+        expected_choice = choices[0]
+
+        actual_choice = prompt.prompt_multiple_choice_for_config(
+            cookiecutter_dict=context,
+            env=environment.StrictEnvironment(),
+            key='available_orientations',
+            options=choices,
+            no_input=True,  # Suppress user input
+        )
+
+        assert not read_user_choice.called
+        assert expected_choice == actual_choice
+
+    def test_should_read_user_choice(self, mocker, choices, context):
+        """Verify prompt_choice_for_config return user selection on no_input=False."""
+        read_user_choice = mocker.patch('cookiecutter.prompt.read_multiple_user_choice')
+        read_user_choice.return_value = ['landscape', 'portrait']
+
+        expected_choice = ['landscape', 'portrait']
+
+        actual_choice = prompt.prompt_multiple_choice_for_config(
+            cookiecutter_dict=context,
+            env=environment.StrictEnvironment(),
+            key='available_orientations',
+            options=choices,
+            no_input=False,  # Ask the user for input
+        )
+        read_user_choice.assert_called_once_with('available_orientations', choices)
         assert expected_choice == actual_choice
 
 

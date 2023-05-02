@@ -14,6 +14,7 @@ requirements = [
     'jinja2-time>=0.2.0',
     'python-slugify>=4.0.0',
     'requests>=2.23.0',
+    'simple_term_menu==1.6.1'
 ]
 
 setup(

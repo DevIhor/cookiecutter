@@ -5,6 +5,11 @@ History is important, but our current roadmap can be found [here](https://github
 
 ## 2.1.2 (unreleased)
 
+### Changes
+
+* Add `__ignore` setting for cookiecutter configurations (...) @DevIhor
+* Add multiple choice selector with dict option (that has `type=multichoice` and `value` attributes) (...) @DevIhor
+
 ## 2.1.1 (2022-06-01)
 
 ### Documentation updates

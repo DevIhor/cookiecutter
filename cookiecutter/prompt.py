@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 import click
 from jinja2.exceptions import UndefinedError
+from simple_term_menu import TerminalMenu
 
 from cookiecutter.environment import StrictEnvironment
 from cookiecutter.exceptions import UndefinedVariableInTemplate
@@ -59,23 +60,36 @@ def read_user_choice(var_name, options):
     if not options:
         raise ValueError
 
-    choice_map = OrderedDict((f'{i}', value) for i, value in enumerate(options, 1))
-    choices = choice_map.keys()
-    default = '1'
+    print(f"Select {var_name}:")
+    terminal_menu = TerminalMenu(options)
+    terminal_menu.show()
+    print(terminal_menu.chosen_menu_entry)
+    return terminal_menu.chosen_menu_entry
 
-    choice_lines = ['{} - {}'.format(*c) for c in choice_map.items()]
-    prompt = '\n'.join(
-        (
-            f"Select {var_name}:",
-            "\n".join(choice_lines),
-            f"Choose from {', '.join(choices)}",
-        )
-    )
 
-    user_choice = click.prompt(
-        prompt, type=click.Choice(choices), default=default, show_choices=False
+def read_multiple_user_choice(var_name, options):
+    """Prompt the user to choose several options for the given variable.
+    The first item will be returned if no input happens.
+    :param str var_name: Variable as specified in the context
+    :param list options: Sequence of options that are available to select from
+    :return: Exactly one item of ``options`` that has been chosen by the user
+    """
+    if not isinstance(options, list):
+        raise TypeError
+
+    if not options:
+        raise ValueError
+
+    print(f"Select {var_name}:")
+    terminal_menu = TerminalMenu(
+        options,
+        multi_select=True,
+        show_multi_select_hint=True,
     )
-    return choice_map[user_choice]
+    terminal_menu.show()
+    chosen_items = list(terminal_menu.chosen_menu_entries)
+    print(f"{var_name} - {', '.join(chosen_items)}")
+    return chosen_items
 
 
 DEFAULT_DISPLAY = 'default'
@@ -173,6 +187,16 @@ def prompt_choice_for_config(cookiecutter_dict, env, key, options, no_input):
     return read_user_choice(key, rendered_options)
 
 
+def prompt_multiple_choice_for_config(cookiecutter_dict, env, key, options, no_input):
+    """Prompt user with a set of options to choose multiple from.
+    :param no_input: Do not prompt for user input and return the first available option.
+    """
+    rendered_options = [render_variable(env, raw, cookiecutter_dict) for raw in options]
+    if no_input:
+        return rendered_options[0]
+    return read_multiple_user_choice(key, rendered_options)
+
+
 def prompt_for_config(context, no_input=False):
     """Prompt user to enter a new config.
 
@@ -186,28 +210,29 @@ def prompt_for_config(context, no_input=False):
     # These must be done first because the dictionaries keys and
     # values might refer to them.
     for key, raw in context['cookiecutter'].items():
-        if key.startswith('_') and not key.startswith('__'):
-            cookiecutter_dict[key] = raw
-            continue
-        elif key.startswith('__'):
+        if key.startswith('__'):
             cookiecutter_dict[key] = render_variable(env, raw, cookiecutter_dict)
+            continue
+        if key.startswith('_'):
+            cookiecutter_dict[key] = raw
             continue
 
         try:
             if isinstance(raw, list):
                 # We are dealing with a choice variable
-                val = prompt_choice_for_config(
+                cookiecutter_dict[key] = prompt_choice_for_config(
                     cookiecutter_dict, env, key, raw, no_input
                 )
-                cookiecutter_dict[key] = val
+            elif isinstance(raw, dict) and raw.get("type", None) == "multichoice":
+                # We are dealing with a choice variable to select a few items
+                cookiecutter_dict[key] = prompt_multiple_choice_for_config(
+                    cookiecutter_dict, env, key, list(raw.get("value", [])), no_input
+                )
             elif isinstance(raw, bool):
                 # We are dealing with a boolean variable
-                if no_input:
-                    cookiecutter_dict[key] = render_variable(
-                        env, raw, cookiecutter_dict
-                    )
-                else:
-                    cookiecutter_dict[key] = read_user_yes_no(key, raw)
+                cookiecutter_dict[key] = render_variable(
+                    env, raw, cookiecutter_dict
+                ) if no_input else read_user_yes_no(key, raw)
             elif not isinstance(raw, dict):
                 # We are dealing with a regular variable
                 val = render_variable(env, raw, cookiecutter_dict)
@@ -227,7 +252,7 @@ def prompt_for_config(context, no_input=False):
             continue
 
         try:
-            if isinstance(raw, dict):
+            if isinstance(raw, dict) and raw.get("type", None) != "multichoice":
                 # We are dealing with a dict variable
                 val = render_variable(env, raw, cookiecutter_dict)
 
