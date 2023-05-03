@@ -7,7 +7,7 @@ History is important, but our current roadmap can be found [here](https://github
 
 ### Changes
 
-* Add `__ignore` setting for cookiecutter configurations (...) @DevIhor
+* Add `_ignore` setting for cookiecutter configurations (...) @DevIhor
 * Add multiple choice selector with dict option (that has `type=multichoice` and `value` attributes) (...) @DevIhor
 * Add `allow_nothing` field to choice and multiple choice selectors (...) @DevIhor
 * Allow dict type for choice selector (with `type=choice`) (...) @DevIhor
