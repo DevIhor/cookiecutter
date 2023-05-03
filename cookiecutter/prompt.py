@@ -10,6 +10,8 @@ from simple_term_menu import TerminalMenu
 from cookiecutter.environment import StrictEnvironment
 from cookiecutter.exceptions import UndefinedVariableInTemplate
 
+NO_CHOICE_ELEMENT_NAME = "None"
+
 
 def read_user_variable(var_name, default_value):
     """Prompt user for variable and return the entered value or given default.
@@ -45,13 +47,14 @@ def read_repo_password(question):
     return click.prompt(question, hide_input=True)
 
 
-def read_user_choice(var_name, options):
+def read_user_choice(var_name, options, allow_nothing=False):
     """Prompt the user to choose from several options for the given variable.
 
     The first item will be returned if no input happens.
 
     :param str var_name: Variable as specified in the context
     :param list options: Sequence of options that are available to select from
+    :param bool allow_nothing: Allow nothing to choose
     :return: Exactly one item of ``options`` that has been chosen by the user
     """
     if not isinstance(options, list):
@@ -60,18 +63,23 @@ def read_user_choice(var_name, options):
     if not options:
         raise ValueError
 
-    print(f"Select {var_name}:")
+    if allow_nothing:
+        options.insert(0, NO_CHOICE_ELEMENT_NAME)
+    select_phrase = f"Select {var_name}:"
+    print(select_phrase)
     terminal_menu = TerminalMenu(options)
     terminal_menu.show()
-    print(terminal_menu.chosen_menu_entry)
-    return terminal_menu.chosen_menu_entry
+    result = terminal_menu.chosen_menu_entry
+    print(f"\033[F\033[{len(select_phrase) + 1}G " + result)
+    return result if result != NO_CHOICE_ELEMENT_NAME else ""
 
 
-def read_multiple_user_choice(var_name, options):
+def read_multiple_user_choice(var_name, options, allow_nothing=False):
     """Prompt the user to choose several options for the given variable.
     The first item will be returned if no input happens.
     :param str var_name: Variable as specified in the context
     :param list options: Sequence of options that are available to select from
+    :param bool allow_nothing: Allow nothing to choose
     :return: Exactly one item of ``options`` that has been chosen by the user
     """
     if not isinstance(options, list):
@@ -80,7 +88,11 @@ def read_multiple_user_choice(var_name, options):
     if not options:
         raise ValueError
 
-    print(f"Select {var_name}:")
+    if allow_nothing:
+        options.insert(0, NO_CHOICE_ELEMENT_NAME)
+
+    select_phrase = f"Select {var_name}:"
+    print(select_phrase)
     terminal_menu = TerminalMenu(
         options,
         multi_select=True,
@@ -88,7 +100,9 @@ def read_multiple_user_choice(var_name, options):
     )
     terminal_menu.show()
     chosen_items = list(terminal_menu.chosen_menu_entries)
-    print(f"{var_name} - {', '.join(chosen_items)}")
+    if NO_CHOICE_ELEMENT_NAME in chosen_items:
+        chosen_items.remove(NO_CHOICE_ELEMENT_NAME)
+    print(f"\033[F\033[{len(select_phrase) + 1}G " + ', '.join(chosen_items))
     return chosen_items
 
 
@@ -181,20 +195,30 @@ def prompt_choice_for_config(cookiecutter_dict, env, key, options, no_input):
 
     :param no_input: Do not prompt for user input and return the first available option.
     """
-    rendered_options = [render_variable(env, raw, cookiecutter_dict) for raw in options]
+    if isinstance(options, list):
+        rendered_options = [render_variable(env, raw, cookiecutter_dict)
+                            for raw in options]
+        allow_nothing = False
+    else:
+        rendered_options = [render_variable(env, raw, cookiecutter_dict)
+                            for raw in list(options.get("value", []))]
+        allow_nothing = options.get("allow_nothing", False)
     if no_input:
         return rendered_options[0]
-    return read_user_choice(key, rendered_options)
+    return read_user_choice(key, rendered_options, allow_nothing=allow_nothing)
 
 
 def prompt_multiple_choice_for_config(cookiecutter_dict, env, key, options, no_input):
     """Prompt user with a set of options to choose multiple from.
     :param no_input: Do not prompt for user input and return the first available option.
     """
-    rendered_options = [render_variable(env, raw, cookiecutter_dict) for raw in options]
+    rendered_options = [render_variable(env, raw, cookiecutter_dict)
+                        for raw in list(options.get("value", []))]
     if no_input:
         return rendered_options[0]
-    return read_multiple_user_choice(key, rendered_options)
+    return read_multiple_user_choice(
+        key, rendered_options, allow_nothing=options.get("allow_nothing", False)
+    )
 
 
 def prompt_for_config(context, no_input=False):
@@ -218,7 +242,8 @@ def prompt_for_config(context, no_input=False):
             continue
 
         try:
-            if isinstance(raw, list):
+            if isinstance(raw, list) \
+                    or (isinstance(raw, dict) and raw.get("type", None) == "choice"):
                 # We are dealing with a choice variable
                 cookiecutter_dict[key] = prompt_choice_for_config(
                     cookiecutter_dict, env, key, raw, no_input
@@ -226,7 +251,7 @@ def prompt_for_config(context, no_input=False):
             elif isinstance(raw, dict) and raw.get("type", None) == "multichoice":
                 # We are dealing with a choice variable to select a few items
                 cookiecutter_dict[key] = prompt_multiple_choice_for_config(
-                    cookiecutter_dict, env, key, list(raw.get("value", [])), no_input
+                    cookiecutter_dict, env, key, raw, no_input
                 )
             elif isinstance(raw, bool):
                 # We are dealing with a boolean variable

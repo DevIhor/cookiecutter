@@ -274,7 +274,7 @@ class TestReadUserChoice:
 
         assert not read_user_variable.called
         assert prompt_choice.called
-        read_user_choice.assert_called_once_with('orientation', choices)
+        read_user_choice.assert_called_once_with('orientation', choices, allow_nothing=False)
         assert cookiecutter_dict == {'orientation': 'all'}
 
     def test_should_invoke_read_user_multiple_choice(self, mocker):
@@ -303,7 +303,7 @@ class TestReadUserChoice:
 
         assert not read_user_variable.called
         assert prompt_choice.called
-        read_multiple_user_choice.assert_called_once_with('orientation', choices)
+        read_multiple_user_choice.assert_called_once_with('orientation', choices, allow_nothing=False)
         assert cookiecutter_dict == {'orientation': ['landscape', 'portrait']}
 
     def test_should_invoke_read_user_variable(self, mocker):
@@ -357,7 +357,7 @@ class TestReadUserChoice:
         cookiecutter_dict = prompt.prompt_for_config(context)
 
         read_user_variable.assert_called_once_with('project_name', 'A New Project')
-        read_user_choice.assert_called_once_with('pkg_name', rendered_choices)
+        read_user_choice.assert_called_once_with('pkg_name', rendered_choices, allow_nothing=False)
         assert cookiecutter_dict == expected
 
 
@@ -405,7 +405,27 @@ class TestPromptChoiceForConfig:
             options=choices,
             no_input=False,  # Ask the user for input
         )
-        read_user_choice.assert_called_once_with('orientation', choices)
+        read_user_choice.assert_called_once_with('orientation', choices, allow_nothing=False)
+        assert expected_choice == actual_choice
+
+    def test_should_read_user_choice_as_dict(self, mocker, choices, context):
+        """Verify prompt_choice_for_config as dictionary return user selection on no_input=False."""
+        read_user_choice = mocker.patch('cookiecutter.prompt.read_user_choice')
+        read_user_choice.return_value = 'all'
+
+        expected_choice = 'all'
+
+        actual_choice = prompt.prompt_choice_for_config(
+            cookiecutter_dict=context,
+            env=environment.StrictEnvironment(),
+            key='orientation',
+            options={
+                'type': 'choice',
+                'value': choices
+            },
+            no_input=False,  # Ask the user for input
+        )
+        read_user_choice.assert_called_once_with('orientation', choices, allow_nothing=False)
         assert expected_choice == actual_choice
 
 
@@ -434,7 +454,10 @@ class TestPromptMultipleChoiceForConfig:
             cookiecutter_dict=context,
             env=environment.StrictEnvironment(),
             key='available_orientations',
-            options=choices,
+            options={
+                'type': 'multichoice',
+                'value': choices
+            },
             no_input=True,  # Suppress user input
         )
 
@@ -452,10 +475,13 @@ class TestPromptMultipleChoiceForConfig:
             cookiecutter_dict=context,
             env=environment.StrictEnvironment(),
             key='available_orientations',
-            options=choices,
+            options={
+                'type': 'multichoice',
+                'value': choices
+            },
             no_input=False,  # Ask the user for input
         )
-        read_user_choice.assert_called_once_with('available_orientations', choices)
+        read_user_choice.assert_called_once_with('available_orientations', choices, allow_nothing=False)
         assert expected_choice == actual_choice
 
 
